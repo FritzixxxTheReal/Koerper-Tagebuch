@@ -823,7 +823,7 @@ window.addEvent=()=>{S.settings.events.push({id:uid(),name:'Neues Ereignis',img:
 window.delEvent=id=>{S.settings.events=S.settings.events.filter(m=>m.id!==id);save();renderVerwaltung();};
 
 /* export / import */
-function syncPayload(){const c=JSON.parse(JSON.stringify(S));delete c.sync;delete c._meta;c._meta={updatedAt:(S.sync&&S.sync.updatedAt)||Date.now(),app:'koerperbuch'};return c;}
+function syncPayload(updatedAt){const c=JSON.parse(JSON.stringify(S));delete c.sync;delete c._meta;c._meta={updatedAt:updatedAt??((S.sync&&S.sync.updatedAt)||Date.now()),app:'koerperbuch',entryCount:entryCount(S)};return c;}
 window.exportData=()=>{const blob=new Blob([JSON.stringify(syncPayload(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`koerper-tagebuch-${todayStr()}.json`;a.click();toast('Export erstellt');};
 function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const localSync=S.sync;S=migrate(JSON.parse(r.result));S.sync=localSync;saveLocal();toast('Import erfolgreich');render();renderVerwaltung();}catch(err){toast('Import fehlgeschlagen');}};r.readAsText(f);}
 window.resetData=()=>{
@@ -888,17 +888,34 @@ function applyRemote(data){
 async function doPush(silent){
   if(!S.sync.token||!S.sync.gistId){if(!silent)toast('Erst verbinden');return false;}
   try{
-    await ghFetch(GIST_API+'/'+S.sync.gistId,{method:'PATCH',body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(syncPayload())}}})});
-    S.sync.lastSyncAt=Date.now();saveLocal();updateSyncStatus();
-    if(!silent)toast('In die Cloud hochgeladen · '+entryCount(S)+' Tage');
+    // Jeder Upload bekommt eine NEUE Versionsnummer. Wichtig bei bewusstem Überschreiben
+    // einer vermeintlich neueren Cloud-Version: sonst bleibt die Cloud danach weiterhin „neuer“.
+    const at=Date.now();
+    const payload=syncPayload(at);
+    await ghFetch(GIST_API+'/'+S.sync.gistId,{method:'PATCH',body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(payload)}}})});
+
+    // Direkt nach dem Upload kontrollieren, ob genau diese Version mit den Einträgen in GitHub liegt.
+    const verify=await fetchRemote();
+    if(!verify)throw new Error('Cloud-Datei konnte nach dem Upload nicht gelesen werden');
+    const localN=entryCount(S),remoteN=entryCount(verify.data);
+    if(verify.at!==at||remoteN!==localN){
+      throw new Error('Upload nicht verifiziert (lokal '+localN+' Tage, Cloud '+remoteN+' Tage)');
+    }
+
+    S.sync.updatedAt=at;
+    S.sync.lastSyncAt=Date.now();
+    saveLocal();updateSyncStatus();
+    if(!silent)toast('Cloud bestätigt · '+remoteN+' Tage hochgeladen');
     return true;
   }catch(e){if(!silent)toast('Upload fehlgeschlagen: '+e.message);return false;}
 }
-async function doPull(){
-  const m=await fetchRemote();
-  if(!m){toast('Im Cloud-Tagebuch sind noch keine Daten.');return;}
+async function doPull(remote){
+  const m=remote||await fetchRemote();
+  if(!m){toast('Im Cloud-Tagebuch sind noch keine Daten.');return false;}
+  const remoteN=entryCount(m.data);
   applyRemote(m.data);S.sync.lastSyncAt=Date.now();saveLocal();
-  updateAfterSync();toast('Aus der Cloud geladen · '+entryCount(S)+' Tage übernommen');
+  updateAfterSync();toast('Cloud bestätigt · '+remoteN+' Tage geladen');
+  return true;
 }
 
 /* „neuere Version gewinnt": gleicht lokale und Cloud-Daten anhand des Zeitstempels ab */
@@ -951,7 +968,7 @@ window.syncPush=async()=>{
   try{
     const m=await fetchRemote();
     if(m&&m.at>(S.sync.updatedAt||0)){
-      return confirmModal('Cloud ist neuer','In der Cloud liegen <b>neuere</b> Daten – wahrscheinlich von einem anderen Gerät. Wirklich mit den Daten <b>dieses</b> Geräts überschreiben?','Ja, hochladen',()=>doPush(),true);
+      return confirmModal('Cloud ist neuer','In der Cloud liegen <b>neuere</b> Daten. Cloud: <b>'+entryCount(m.data)+' Tage</b>, lokal: <b>'+entryCount(S)+' Tage</b>. Wirklich mit den Daten <b>dieses</b> Geräts überschreiben?','Ja, hochladen',()=>doPush(),true);
     }
     doPush();
   }catch(e){toast('Upload fehlgeschlagen: '+e.message);}
@@ -962,10 +979,11 @@ window.syncPull=async()=>{
   try{
     const m=await fetchRemote();
     if(!m)return toast('Im Cloud-Tagebuch sind noch keine Daten.');
+    const remoteN=entryCount(m.data),localN=entryCount(S);
     if((S.sync.updatedAt||0)>m.at){
-      return confirmModal('Lokale Daten sind neuer','Dieses Gerät hat <b>neuere</b> Änderungen als die Cloud. Beim Laden gehen diese lokalen Änderungen verloren. Trotzdem laden?','Ja, laden',()=>doPull(),true);
+      return confirmModal('Lokale Daten sind neuer','Dieses Gerät hat <b>neuere</b> Änderungen als die Cloud. Cloud: <b>'+remoteN+' Tage</b>, lokal: <b>'+localN+' Tage</b>. Beim Laden wird der lokale Stand ersetzt. Trotzdem laden?','Ja, laden',()=>doPull(m),true);
     }
-    doPull();
+    doPull(m);
   }catch(e){toast('Laden fehlgeschlagen: '+e.message);}
 };
 
