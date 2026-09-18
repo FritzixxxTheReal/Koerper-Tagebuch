@@ -468,7 +468,7 @@ function renderMoodCard(){
     const e=getEntry(iso),dt=parseISO(iso),isToday=iso===todayStr();let fill='',ev='';
     if(e&&e.moods&&e.moods.length)fill=e.moods.map(id=>{const mm=S.settings.moods.find(x=>x.id===id);return `<i style="background:${mm?mm.color:'#ccc'}"></i>`;}).join('');
     if(e&&e.events&&e.events.length){const imgs=e.events.map(id=>{const ee=S.settings.events.find(x=>x.id===id);return ee?ee.img:null;}).filter(Boolean);ev=`<div class="ev-grid" style="${gridStyle(imgs.length)}">${imgs.map(s=>`<img src="${s}">`).join('')}</div>`;}
-    return `<div class="mood-cell"><div class="mood-box ${isToday?'today':''}" onclick="openMoodEntry('${iso}')">${fill}${ev}</div><div class="d ${isToday?'now':''}">${dt.getDate()}.${dt.getMonth()+1}</div></div>`;
+    return `<div class="mood-cell"><div class="mood-box ${isToday?'today':''}" onclick="openMoodEntry('${iso}')">${fill}${ev}</div><div class="d ${isToday?'now':''}">${isToday?'Heute':dt.getDate()+'.'+(dt.getMonth()+1)}</div></div>`;
   }).join('');
   $('#mood-card').innerHTML=`<div class="card-h"><h3>Stimmung & Ereignisse</h3><span class="sub">letzte ${count} Tage</span><div class="spacer"></div>
       <button class="btn sm" onclick="openMoodEntry()"><span class="plus">+</span> Eintrag</button></div>
@@ -539,9 +539,9 @@ function drawChart(metric){
   (cfg.bands||[]).forEach((b,i)=>{const a=refmap[b.from],c=refmap[b.to];if(a==null||c==null)return;ann['b'+i]={type:'box',yMin:Math.min(a,c),yMax:Math.max(a,c),backgroundColor:hexA(b.color,b.alpha),borderWidth:0,drawTime:'beforeDatasetsDraw'};});
   const rolling=data.map(p=>({x:p.x,y:rollingAvg(metric,14,p.d)}));
   const datasets=[
-    {label:'Messwert',data,parsing:false,borderColor:hexA(color,.35),backgroundColor:color,pointRadius:2.5,pointHoverRadius:5,borderWidth:1,tension:.2,pointBackgroundColor:color,yAxisID:'y'}
+    {label:'Messwert',data,parsing:false,borderColor:hexA(color,.35),backgroundColor:color,pointRadius:2.5,pointHoverRadius:5,borderWidth:2.8,tension:.2,pointBackgroundColor:color,yAxisID:'y'}
   ];
-  if(chartAvgVisible[metric])datasets.push({label:'14-Tage-Schnitt',data:rolling,parsing:false,borderColor:color,borderWidth:2.4,pointRadius:0,tension:.35,yAxisID:'y'});
+  if(chartAvgVisible[metric])datasets.push({label:'14-Tage-Schnitt',data:rolling,parsing:false,borderColor:color,borderWidth:1.4,pointRadius:0,tension:.35,yAxisID:'y'});
   const scales={
     x:{type:'linear',min:xc.min,max:xc.max,afterBuildTicks:axis=>{axis.ticks=xc.ticks.map(v=>({value:v}));},ticks:{callback:v=>xc.fmt(v),autoSkip:false,maxRotation:0,font:{size:11},color:'#8a97a0'},grid:{color:'#eef2f4'}},
     y:{position:'left',min:cfg.min,max:cfg.max,ticks:{stepSize:cfg.step,font:{size:11},color:'#8a97a0'},grid:{color:'#eef2f4'}}
