@@ -787,9 +787,9 @@ function renderVerwaltung(){
   app.querySelectorAll('[data-sym]').forEach(i=>i.addEventListener('change',e=>{S.settings[e.target.dataset.sym]=e.target.value;save();renderVerwaltung();}));
   app.querySelectorAll('[data-chart]').forEach(i=>i.addEventListener('change',e=>{const[m,k]=e.target.dataset.chart.split('.');S.settings.charts[m][k]=num(e.target.value);save();renderVerwaltung();}));
   bindBandEditors();bindMoodEditor();bindEventEditor();
-  $('#sy-token').addEventListener('change',e=>{S.sync.token=e.target.value.trim();save();});
-  $('#sy-gist').addEventListener('change',e=>{S.sync.gistId=e.target.value.trim();save();});
-  $('#sy-auto').addEventListener('change',e=>{S.sync.auto=e.target.checked;save();});
+  $('#sy-token').addEventListener('change',e=>{S.sync.token=e.target.value.trim();saveLocal();updateSyncStatus();});
+  $('#sy-gist').addEventListener('change',e=>{S.sync.gistId=e.target.value.trim();saveLocal();updateSyncStatus();});
+  $('#sy-auto').addEventListener('change',e=>{S.sync.auto=e.target.checked;saveLocal();updateSyncStatus();if(S.sync.auto&&S.sync.token&&S.sync.gistId)reconcile().catch(()=>updateSyncStatus());});
   $('#import-file').addEventListener('change',importData);
 }
 function num(v){if(v===''||v==null)return null;const n=Number(v);return isNaN(n)?null:n;}
@@ -890,7 +890,7 @@ async function doPush(silent){
   try{
     await ghFetch(GIST_API+'/'+S.sync.gistId,{method:'PATCH',body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(syncPayload())}}})});
     S.sync.lastSyncAt=Date.now();saveLocal();updateSyncStatus();
-    if(!silent)toast('In die Cloud hochgeladen');
+    if(!silent)toast('In die Cloud hochgeladen · '+entryCount(S)+' Tage');
     return true;
   }catch(e){if(!silent)toast('Upload fehlgeschlagen: '+e.message);return false;}
 }
@@ -898,14 +898,24 @@ async function doPull(){
   const m=await fetchRemote();
   if(!m){toast('Im Cloud-Tagebuch sind noch keine Daten.');return;}
   applyRemote(m.data);S.sync.lastSyncAt=Date.now();saveLocal();
-  updateAfterSync();toast('Aus der Cloud geladen');
+  updateAfterSync();toast('Aus der Cloud geladen · '+entryCount(S)+' Tage übernommen');
 }
 
 /* „neuere Version gewinnt": gleicht lokale und Cloud-Daten anhand des Zeitstempels ab */
+function entryCount(data=S){return data&&data.entries?Object.keys(data.entries).length:0;}
+
 async function reconcile(){
   const m=await fetchRemote();
   const localAt=S.sync.updatedAt||0;
   if(!m){await doPush(true);return 'pushed';}
+
+  // Sicherheitsnetz: Ein frisch eingerichtetes Gerät ohne Tagebucheinträge darf
+  // einen vorhandenen Cloud-Datenbestand nicht nur wegen eines lokalen Sync-Zeitstempels überschreiben.
+  const localEntries=entryCount(S),remoteEntries=entryCount(m.data);
+  if(localEntries===0&&remoteEntries>0){
+    applyRemote(m.data);S.sync.lastSyncAt=Date.now();saveLocal();updateAfterSync();return 'pulled';
+  }
+
   if(m.at>localAt){applyRemote(m.data);S.sync.lastSyncAt=Date.now();saveLocal();updateAfterSync();return 'pulled';}
   if(localAt>m.at){await doPush(true);return 'pushed';}
   S.sync.lastSyncAt=Date.now();saveLocal();updateSyncStatus();return 'equal';
