@@ -163,6 +163,9 @@ select option{background:var(--surface);color:var(--ink)}
 .range-tabs{display:flex;gap:3px;flex-wrap:wrap}
 .range-tabs button{border:1px solid var(--line);background:var(--surface);padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;color:var(--muted)}
 .range-tabs button.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.chart-options{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.avg-toggle{border:1px solid var(--line);background:var(--surface);padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;color:var(--muted)}
+.avg-toggle.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 .chart-box{height:260px;position:relative}
 
 /* forms / verwaltung */
@@ -399,6 +402,7 @@ function render(){if(page==='dashboard')renderDashboard();else if(page==='rankin
    DASHBOARD
    ========================================================================= */
 const chartState={weight:'all',bodyfat:'all',muscle:'all'};
+const chartAvgVisible={weight:true,bodyfat:true,muscle:true};
 let charts={};
 function renderDashboard(){
   $('#app').innerHTML=`
@@ -449,7 +453,13 @@ function renderCalendarCard(){
     <div class="cal-grid">${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>`;
 }
 function gridStyle(n){const c=Math.ceil(Math.sqrt(n)),r=Math.ceil(n/c);return `grid-template-columns:repeat(${c},1fr);grid-template-rows:repeat(${r},1fr)`;}
-window.calMove=(dir)=>{const[y,m]=S.ui.calMonth.split('-').map(Number);S.ui.calMonth=toISO(new Date(y,m-1+dir,1)).slice(0,7);saveLocal();renderCalendarCard();};
+window.calMove=(dir)=>{
+  const[y,m]=S.ui.calMonth.split('-').map(Number);
+  const d=new Date(y,m-1+dir,1);
+  S.ui.calMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  saveLocal();
+  renderCalendarCard();
+};
 
 function moodDayCount(){const card=$('#mood-card');if(!card)return 14;const inner=card.clientWidth-36;const per=50;return Math.max(7,Math.min(21,Math.floor((inner+6)/per)));}
 function renderMoodCard(){
@@ -472,9 +482,13 @@ function renderCharts(){
   const wrap=$('#charts');
   wrap.innerHTML=defs.map(d=>{const cur=latestValue(d.m),avg=rollingAvg(d.m,14);
     return `<div class="card card-pad chart-card"><div class="card-h"><div><h3>${d.label}</h3><div class="sub" style="margin-top:2px">aktuell ${cur!=null?fmt(cur,1):'–'} ${d.unit} · Ø14T ${avg!=null?fmt(avg,1):'–'}</div></div><div class="spacer"></div><button class="btn sm" onclick="openBodyEntry()"><span class="plus">+</span> Eintrag</button></div>
-      <div class="range-tabs" data-m="${d.m}" style="margin-bottom:10px">${[['all','Gesamt'],['1y','1 J'],['6m','6 M'],['3m','3 M'],['1m','1 M']].map(([k,l])=>`<button data-r="${k}" class="${chartState[d.m]===k?'active':''}">${l}</button>`).join('')}</div>
+      <div class="chart-options">
+        <div class="range-tabs" data-m="${d.m}">${[['all','Gesamt'],['1y','1 J'],['6m','6 M'],['3m','3 M'],['1m','1 M']].map(([k,l])=>`<button data-r="${k}" class="${chartState[d.m]===k?'active':''}">${l}</button>`).join('')}</div>
+        <button class="avg-toggle ${chartAvgVisible[d.m]?'active':''}" data-m="${d.m}" type="button">14-Tage-Schnitt</button>
+      </div>
       <div class="chart-box"><canvas id="chart-${d.m}"></canvas></div></div>`;}).join('');
   wrap.querySelectorAll('.range-tabs').forEach(rt=>rt.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const m=rt.dataset.m;chartState[m]=b.dataset.r;rt.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));drawChart(m);}));
+  wrap.querySelectorAll('.avg-toggle').forEach(btn=>btn.addEventListener('click',()=>{const m=btn.dataset.m;chartAvgVisible[m]=!chartAvgVisible[m];btn.classList.toggle('active',chartAvgVisible[m]);drawChart(m);}));
   defs.forEach(d=>drawChart(d.m));
 }
 function rangeStart(key){if(key==='all')return null;const d=new Date();if(key==='1y')d.setFullYear(d.getFullYear()-1);if(key==='6m')d.setMonth(d.getMonth()-6);if(key==='3m')d.setMonth(d.getMonth()-3);if(key==='1m')d.setMonth(d.getMonth()-1);return d.getTime();}
@@ -525,9 +539,9 @@ function drawChart(metric){
   (cfg.bands||[]).forEach((b,i)=>{const a=refmap[b.from],c=refmap[b.to];if(a==null||c==null)return;ann['b'+i]={type:'box',yMin:Math.min(a,c),yMax:Math.max(a,c),backgroundColor:hexA(b.color,b.alpha),borderWidth:0,drawTime:'beforeDatasetsDraw'};});
   const rolling=data.map(p=>({x:p.x,y:rollingAvg(metric,14,p.d)}));
   const datasets=[
-    {label:'Messwert',data,parsing:false,borderColor:hexA(color,.35),backgroundColor:color,pointRadius:2.5,pointHoverRadius:5,borderWidth:1,tension:.2,pointBackgroundColor:color,yAxisID:'y'},
-    {label:'14-Tage-Schnitt',data:rolling,parsing:false,borderColor:color,borderWidth:2.4,pointRadius:0,tension:.35,yAxisID:'y'}
+    {label:'Messwert',data,parsing:false,borderColor:hexA(color,.35),backgroundColor:color,pointRadius:2.5,pointHoverRadius:5,borderWidth:1,tension:.2,pointBackgroundColor:color,yAxisID:'y'}
   ];
+  if(chartAvgVisible[metric])datasets.push({label:'14-Tage-Schnitt',data:rolling,parsing:false,borderColor:color,borderWidth:2.4,pointRadius:0,tension:.35,yAxisID:'y'});
   const scales={
     x:{type:'linear',min:xc.min,max:xc.max,afterBuildTicks:axis=>{axis.ticks=xc.ticks.map(v=>({value:v}));},ticks:{callback:v=>xc.fmt(v),autoSkip:false,maxRotation:0,font:{size:11},color:'#8a97a0'},grid:{color:'#eef2f4'}},
     y:{position:'left',min:cfg.min,max:cfg.max,ticks:{stepSize:cfg.step,font:{size:11},color:'#8a97a0'},grid:{color:'#eef2f4'}}
