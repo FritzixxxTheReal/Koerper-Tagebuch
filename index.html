@@ -281,8 +281,12 @@ const GIST_DESC='Körper-Tagebuch Daten [koerperbuch-sync]';
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const uid=()=>Math.random().toString(36).slice(2,9);
+// Datum immer nach der lokalen Gerätezeit bilden. Dadurch wechselt „Heute“ exakt
+// um 00:00 Uhr der auf Handy/Laptop eingestellten Zeitzone (z. B. Europe/Berlin).
 const todayStr=()=>toISO(new Date());
-function toISO(d){return d.toISOString().slice(0,10);}
+function toISO(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function parseISO(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function fmt(n,dec=1){return n==null||n===''||isNaN(n)?'–':Number(n).toLocaleString('de-DE',{minimumFractionDigits:dec,maximumFractionDigits:dec});}
 function fmt0(n){return n==null||isNaN(n)?'–':Math.round(n).toLocaleString('de-DE');}
@@ -588,7 +592,11 @@ window.openBodyEntry=(date=todayStr())=>{const e=getEntry(date)||{};
         <div class="field"><label>Körperfett (%)</label><input type="number" step="0.1" id="be-fat" value="${e.fat??''}"></div>
         <div class="field"><label>Muskelmasse (kg)</label><input type="number" step="0.1" id="be-muscle" value="${e.muscle??''}"></div></div>
       <div class="hint">BMI wird automatisch aus Gewicht morgens + Körpergröße (${S.settings.height} cm) berechnet.</div></div>
-    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">Abbrechen</button><button class="btn pri" onclick="saveBodyEntry()">Speichern</button></div></div>`);};
+    <div class="modal-f"><button class="btn ghost" onclick="closeModal()">Abbrechen</button><button class="btn pri" onclick="saveBodyEntry()">Speichern</button></div></div>`);
+  // Beim Wechsel des Datums vorhandene Werte dieses Tages sofort einblenden.
+  const fillBodyFields=d=>{const x=getEntry(d)||{};[['be-wM','wM'],['be-wMin','wMin'],['be-wE','wE'],['be-fat','fat'],['be-muscle','muscle']].forEach(([id,k])=>{$('#'+id).value=x[k]??'';});};
+  $('#be-date').addEventListener('change',ev=>fillBodyFields(ev.target.value));
+};
 window.saveBodyEntry=()=>{const date=$('#be-date').value;if(!date)return;const e=ensureEntry(date);const g=id=>{const v=$('#'+id).value;return v===''?null:Number(v);};e.wM=g('be-wM');e.wMin=g('be-wMin');e.wE=g('be-wE');e.fat=g('be-fat');e.muscle=g('be-muscle');save();closeModal();toast('Körperwerte gespeichert');render();};
 
 window.openCalorieEntry=(date=todayStr())=>{
