@@ -531,7 +531,14 @@ function drawChart(metric){
   const color={weight:'#e0a23b',bodyfat:'#e2725b',muscle:'#4f7cc4'}[metric];
   const pts=seriesFor(metric);
   const xc=xAxisConfig(metric);
-  const data=pts.filter(p=>(xc.min==null||p.x>=xc.min)&&(xc.max==null||p.x<=xc.max));
+  let data=pts.filter(p=>(xc.min==null||p.x>=xc.min)&&(xc.max==null||p.x<=xc.max));
+  // In der 3-Monats-Ansicht einen Messwert direkt vor dem sichtbaren Zeitraum
+  // als Linien-Kontext mitgeben. Die X-Achse bleibt unverändert am Monatsanfang,
+  // die Kurve läuft aber bereits ab der linken Diagrammkante in den Zeitraum hinein.
+  if(chartState[metric]==='3m' && xc.min!=null){
+    const prev=[...pts].reverse().find(p=>p.x<xc.min);
+    if(prev)data=[prev,...data];
+  }
   const refmap=chartRefMap(metric),ann={};
   // reference lines
   const lineDefs=[];
