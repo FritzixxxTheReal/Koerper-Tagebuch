@@ -339,14 +339,14 @@ function defaultState(){
       },
       calories:{grundumsatz:1700, defizit:300, ringColor:'#d9dee1', intakeColor:'#2f9e8a'},
       moods:[
-        {id:uid(),name:'Top',color:'#2f9e8a'},{id:uid(),name:'Gut',color:'#8bc9a0'},
-        {id:uid(),name:'Neutral',color:'#e5c15a'},{id:uid(),name:'Müde',color:'#e0955a'},
-        {id:uid(),name:'Schlecht',color:'#d1495b'}
+        {id:uid(),name:'Top',emoji:'😄',color:'#2f9e8a'},{id:uid(),name:'Gut',emoji:'🙂',color:'#8bc9a0'},
+        {id:uid(),name:'Neutral',emoji:'😐',color:'#e5c15a'},{id:uid(),name:'Müde',emoji:'😴',color:'#e0955a'},
+        {id:uid(),name:'Schlecht',emoji:'😞',color:'#d1495b'}
       ],
       events:[
-        {id:uid(),name:'Cheat Day',img:emojiImg('🍕')},
-        {id:uid(),name:'Krank',img:emojiImg('🤒')},
-        {id:uid(),name:'Sport-PR',img:emojiImg('🏆')}
+        {id:uid(),name:'Cheat Day',emoji:'🍕',img:emojiImg('🍕')},
+        {id:uid(),name:'Krank',emoji:'🤒',img:emojiImg('🤒')},
+        {id:uid(),name:'Sport-PR',emoji:'🏆',img:emojiImg('🏆')}
       ],
       symSport:'⭐', symFood:'⭐'
     },
@@ -368,6 +368,18 @@ function defaultState(){
 let S=load();
 function load(){try{const raw=localStorage.getItem(LS_KEY);if(raw)return migrate(JSON.parse(raw));}catch(e){}return defaultState();}
 function migrate(s){
+  if(s.settings&&Array.isArray(s.settings.moods)){
+    const fallback=['😄','🙂','😐','😴','😞'];
+    s.settings.moods.forEach((m,i)=>{if(!m.emoji)m.emoji=fallback[i]||'🙂';});
+  }
+  if(s.settings&&Array.isArray(s.settings.events)){
+    s.settings.events.forEach(e=>{
+      if(!e.emoji){
+        const known={'🍕':'🍕','🤒':'🤒','🏆':'🏆'};
+        e.emoji=known[e.name==='Cheat Day'?'🍕':e.name==='Krank'?'🤒':e.name==='Sport-PR'?'🏆':'']||'⭐';
+      }
+    });
+  }
   // map old fixed band keys -> new reference keys
   const map={w_start:'start',w_goal:'goal',w_ult:'ult',f_goal:'goal',f_ult:'ult',m_limit:'limit',m_warn:'warn'};
   if(s.settings&&s.settings.charts){for(const m in s.settings.charts){const c=s.settings.charts[m];if(Array.isArray(c.bands))c.bands.forEach(b=>{if(map[b.from])b.from=map[b.from];if(map[b.to])b.to=map[b.to];});}}
@@ -766,10 +778,10 @@ function renderVerwaltung(){
     ${['weight','bodyfat','muscle'].map(chartSettingsHtml).join('')}</div>
 
   <div class="vman-grid">
-    <div class="card card-pad sec"><h2>Stimmungen</h2><div class="desc">Auswahl und Farbe für den Stimmungs-Tracker.</div>
+    <div class="card card-pad sec"><h2>Stimmungen</h2><div class="desc">Emoji, Auswahl und Farbe für den Stimmungs-Tracker.</div>
       <div class="chip-list" id="mood-editor">${s.moods.map(moodChip).join('')}</div>
       <button class="btn sm" style="margin-top:10px" onclick="addMood()"><span class="plus">+</span> Stimmung</button></div>
-    <div class="card card-pad sec"><h2>Besondere Ereignisse</h2><div class="desc">Name + Bild (transparenter Hintergrund empfohlen).</div>
+    <div class="card card-pad sec"><h2>Besondere Ereignisse</h2><div class="desc">Emoji + Name. Das Emoji wird in Kalender und Übersicht angezeigt.</div>
       <div class="chip-list" id="event-editor">${s.events.map(eventChip).join('')}</div>
       <button class="btn sm" style="margin-top:10px" onclick="addEvent()"><span class="plus">+</span> Ereignis</button></div>
   </div>
@@ -827,14 +839,14 @@ function bindBandEditors(){$$('[data-band]').forEach(i=>i.addEventListener('inpu
 window.addBand=m=>{S.settings.charts[m].bands.push({from:'bottom',to:'top',color:'#2f9e8a',alpha:.1});save();renderVerwaltung();};
 window.delBand=(m,i)=>{S.settings.charts[m].bands.splice(i,1);save();renderVerwaltung();};
 
-function moodChip(m){return `<div class="chip" data-id="${m.id}"><span class="sw" style="background:${m.color}"></span><input type="text" class="m-name" value="${m.name}"><input type="color" class="m-color" value="${m.color}"><button class="del-btn" title="Löschen" onclick="delMood('${m.id}')">${TRASH}</button></div>`;}
-function bindMoodEditor(){$$('#mood-editor .chip').forEach(chip=>{const id=chip.dataset.id;chip.querySelector('.m-name').addEventListener('change',e=>{S.settings.moods.find(x=>x.id===id).name=e.target.value;save();});chip.querySelector('.m-color').addEventListener('input',e=>{const m=S.settings.moods.find(x=>x.id===id);m.color=e.target.value;chip.querySelector('.sw').style.background=e.target.value;save();});});}
-window.addMood=()=>{S.settings.moods.push({id:uid(),name:'Neu',color:'#7f8c94'});save();renderVerwaltung();};
+function moodChip(m){return `<div class="chip" data-id="${m.id}"><span class="sw" style="background:${m.color}"></span><span class="m-emoji" style="font-size:24px;width:28px;text-align:center">${esc(m.emoji||'🙂')}</span><input type="text" class="m-emoji-input" value="${esc(m.emoji||'🙂')}" maxlength="3" title="Emoji"><input type="text" class="m-name" value="${esc(m.name)}"><input type="color" class="m-color" value="${m.color}"><button class="del-btn" title="Löschen" onclick="delMood('${m.id}')">${TRASH}</button></div>`;}
+function bindMoodEditor(){$$('#mood-editor .chip').forEach(chip=>{const id=chip.dataset.id;chip.querySelector('.m-name').addEventListener('change',e=>{S.settings.moods.find(x=>x.id===id).name=e.target.value;save();});chip.querySelector('.m-emoji-input').addEventListener('input',e=>{const m=S.settings.moods.find(x=>x.id===id);m.emoji=e.target.value;chip.querySelector('.m-emoji').textContent=e.target.value||'🙂';save();});chip.querySelector('.m-color').addEventListener('input',e=>{const m=S.settings.moods.find(x=>x.id===id);m.color=e.target.value;chip.querySelector('.sw').style.background=e.target.value;save();});});}
+window.addMood=()=>{S.settings.moods.push({id:uid(),name:'Neu',emoji:'🙂',color:'#7f8c94'});save();renderVerwaltung();};
 window.delMood=id=>{S.settings.moods=S.settings.moods.filter(m=>m.id!==id);save();renderVerwaltung();};
 
-function eventChip(ev){return `<div class="chip" data-id="${ev.id}"><img src="${ev.img||emojiImg('⭐')}"><input type="text" class="e-name" value="${ev.name}"><label class="btn ghost sm" style="cursor:pointer">Bild<input type="file" accept="image/*" class="e-img" style="display:none"></label><button class="del-btn" title="Löschen" onclick="delEvent('${ev.id}')">${TRASH}</button></div>`;}
-function bindEventEditor(){$$('#event-editor .chip').forEach(chip=>{const id=chip.dataset.id;chip.querySelector('.e-name').addEventListener('change',e=>{S.settings.events.find(x=>x.id===id).name=e.target.value;save();});chip.querySelector('.e-img').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;resizeImage(f,120,d=>{const ev=S.settings.events.find(x=>x.id===id);ev.img=d;chip.querySelector('img').src=d;save();toast('Bild aktualisiert');});});});}
-window.addEvent=()=>{S.settings.events.push({id:uid(),name:'Neues Ereignis',img:emojiImg('⭐')});save();renderVerwaltung();};
+function eventChip(ev){return `<div class="chip" data-id="${ev.id}"><span class="e-emoji" style="font-size:24px;width:28px;text-align:center">${esc(ev.emoji||'⭐')}</span><input type="text" class="e-emoji-input" value="${esc(ev.emoji||'⭐')}" maxlength="3" title="Emoji"><input type="text" class="e-name" value="${esc(ev.name)}"><button class="del-btn" title="Löschen" onclick="delEvent('${ev.id}')">${TRASH}</button></div>`;}
+function bindEventEditor(){$$('#event-editor .chip').forEach(chip=>{const id=chip.dataset.id;chip.querySelector('.e-name').addEventListener('change',e=>{S.settings.events.find(x=>x.id===id).name=e.target.value;save();});chip.querySelector('.e-emoji-input').addEventListener('input',e=>{const ev=S.settings.events.find(x=>x.id===id);ev.emoji=e.target.value;chip.querySelector('.e-emoji').textContent=e.target.value||'⭐';save();});});}
+window.addEvent=()=>{S.settings.events.push({id:uid(),name:'Neues Ereignis',emoji:'⭐',img:emojiImg('⭐')});save();renderVerwaltung();};
 window.delEvent=id=>{S.settings.events=S.settings.events.filter(m=>m.id!==id);save();renderVerwaltung();};
 
 /* export / import */
