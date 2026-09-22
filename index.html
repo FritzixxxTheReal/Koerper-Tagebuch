@@ -155,6 +155,9 @@ select option{background:var(--surface);color:var(--ink)}
 .mood-box i{flex:1}
 .mood-box .ev-grid{position:absolute;inset:0;display:grid;place-items:center;gap:1px;padding:10%}
 .mood-box .ev-grid img{width:100%;height:100%;object-fit:contain}
+.event-symbol{display:grid;place-items:center;width:100%;height:100%;line-height:1;font-size:clamp(14px,2vw,24px)}
+.pick .event-symbol{width:auto;height:auto;font-size:18px}
+.dd-tag .event-symbol{width:auto;height:auto;font-size:14px}
 .mood-cell .d{text-align:center;font-size:10px;color:var(--muted);margin-top:3px;font-weight:600}
 .mood-cell .d.now{color:var(--accent)}
 
@@ -297,6 +300,14 @@ const MONTHS=['Januar','Februar','März','April','Mai','Juni','Juli','August','S
 const TRASH='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3a1 1 0 0 0-1 1v1H4a1 1 0 1 0 0 2h1l1 12.1A2.9 2.9 0 0 0 8.9 22h6.2a2.9 2.9 0 0 0 2.9-2.9L19 7h1a1 1 0 1 0 0-2h-4V4a1 1 0 0 0-1-1H9zm1 4V5h4v2h-4zm-.6 3a.9.9 0 0 1 .9.9v6a.9.9 0 1 1-1.8 0v-6a.9.9 0 0 1 .9-.9zm5.2 0a.9.9 0 0 1 .9.9v6a.9.9 0 1 1-1.8 0v-6a.9.9 0 0 1 .9-.9z"/></svg>';
 
 function emojiImg(e){return 'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><text x="20" y="30" font-size="30" text-anchor="middle">${e}</text></svg>`);}
+function emojiFromImg(src){
+  if(!src||!String(src).startsWith('data:image/svg+xml'))return null;
+  try{
+    const svg=decodeURIComponent(String(src).split(',').slice(1).join(','));
+    const m=svg.match(/<text[^>]*>([\s\S]*?)<\/text>/i);
+    return m&&m[1]?m[1]:null;
+  }catch(e){return null;}
+}
 
 /* custom, fully-styled dropdown */
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -344,9 +355,9 @@ function defaultState(){
         {id:uid(),name:'Schlecht',color:'#d1495b'}
       ],
       events:[
-        {id:uid(),name:'Cheat Day',img:emojiImg('🍕')},
-        {id:uid(),name:'Krank',img:emojiImg('🤒')},
-        {id:uid(),name:'Sport-PR',img:emojiImg('🏆')}
+        {id:uid(),name:'Cheat Day',emoji:'🍕'},
+        {id:uid(),name:'Krank',emoji:'🤒'},
+        {id:uid(),name:'Sport-PR',emoji:'🏆'}
       ],
       symSport:'⭐', symFood:'⭐'
     },
@@ -369,7 +380,10 @@ let S=load();
 function load(){try{const raw=localStorage.getItem(LS_KEY);if(raw)return migrate(JSON.parse(raw));}catch(e){}return defaultState();}
 function migrate(s){
   if(s.settings && Array.isArray(s.settings.events)){
-    s.settings.events.forEach(ev=>{if(!ev.emoji)ev.emoji='⭐';});
+    s.settings.events.forEach(ev=>{
+      if(!ev.emoji)ev.emoji=emojiFromImg(ev.img)||'⭐';
+      delete ev.img;
+    });
   }
 
   // map old fixed band keys -> new reference keys
@@ -450,7 +464,7 @@ function renderCalendarCard(){
     let fill='',ev='',dot='';
     if(e){
       if(e.moods&&e.moods.length)fill=`<div class="mood-fill">${e.moods.map(id=>{const mm=S.settings.moods.find(x=>x.id===id);return `<i style="background:${mm?mm.color:'#ccc'}"></i>`;}).join('')}</div>`;
-      if(e.events&&e.events.length){const imgs=e.events.map(id=>{const ee=S.settings.events.find(x=>x.id===id);return ee?ee.img:null;}).filter(Boolean);ev=`<div class="ev" style="${gridStyle(imgs.length)}">${imgs.map(s=>`<img src="${s}">`).join('')}</div>`;}
+      if(e.events&&e.events.length){const emojis=e.events.map(id=>{const ee=S.settings.events.find(x=>x.id===id);return ee?(ee.emoji||'⭐'):null;}).filter(Boolean);ev=`<div class="ev" style="${gridStyle(emojis.length)}">${emojis.map(x=>`<span class="event-symbol">${esc(x)}</span>`).join('')}</div>`;}
       const has=e.wM!=null||e.fat!=null||e.muscle!=null||(e.intake&&e.intake.length)||(e.sport&&e.sport.length)||(e.moods&&e.moods.length)||(e.events&&e.events.length);
       if(has)dot=`<div class="cal-dot"></div>`;
     }
@@ -475,7 +489,7 @@ function renderMoodCard(){
   const cells=days.map(iso=>{
     const e=getEntry(iso),dt=parseISO(iso),isToday=iso===todayStr();let fill='',ev='';
     if(e&&e.moods&&e.moods.length)fill=e.moods.map(id=>{const mm=S.settings.moods.find(x=>x.id===id);return `<i style="background:${mm?mm.color:'#ccc'}"></i>`;}).join('');
-    if(e&&e.events&&e.events.length){const imgs=e.events.map(id=>{const ee=S.settings.events.find(x=>x.id===id);return ee?ee.img:null;}).filter(Boolean);ev=`<div class="ev-grid" style="${gridStyle(imgs.length)}">${imgs.map(s=>`<img src="${s}">`).join('')}</div>`;}
+    if(e&&e.events&&e.events.length){const emojis=e.events.map(id=>{const ee=S.settings.events.find(x=>x.id===id);return ee?(ee.emoji||'⭐'):null;}).filter(Boolean);ev=`<div class="ev-grid" style="${gridStyle(emojis.length)}">${emojis.map(x=>`<span class="event-symbol">${esc(x)}</span>`).join('')}</div>`;}
     return `<div class="mood-cell"><div class="mood-box ${isToday?'today':''}" onclick="openMoodEntry('${iso}')">${fill}${ev}</div><div class="d ${isToday?'now':''}">${isToday?'Heute':dt.getDate()+'.'+(dt.getMonth()+1)}</div></div>`;
   }).join('');
   $('#mood-card').innerHTML=`<div class="card-h"><h3>Stimmung & Ereignisse</h3><span class="sub">letzte ${count} Tage</span><div class="spacer"></div>
@@ -632,7 +646,7 @@ window.openMoodEntry=(date=todayStr())=>{const e=getEntry(date)||{},sel=new Set(
       <div style="font-weight:700;margin-bottom:8px">Stimmung (Mehrfachauswahl)</div>
       <div class="pick-grid" id="me-moods">${S.settings.moods.map(m=>`<button class="pick ${sel.has(m.id)?'on':''}" data-id="${m.id}"><span class="cd" style="background:${m.color}"></span>${m.name}</button>`).join('')}</div>
       <div style="font-weight:700;margin:16px 0 8px">Besondere Ereignisse</div>
-      <div class="pick-grid" id="me-events">${S.settings.events.map(ev=>`<button class="pick ${selE.has(ev.id)?'on':''}" data-id="${ev.id}"><img src="${ev.img}">${ev.name}</button>`).join('')}</div></div>
+      <div class="pick-grid" id="me-events">${S.settings.events.map(ev=>`<button class="pick ${selE.has(ev.id)?'on':''}" data-id="${ev.id}"><span class="event-symbol">${esc(ev.emoji||'⭐')}</span>${esc(ev.name)}</button>`).join('')}</div></div>
     <div class="modal-f"><button class="btn ghost" onclick="closeModal()">Abbrechen</button><button class="btn pri" onclick="saveMoodEntry()">Speichern</button></div></div>`);
   $('#me-moods').addEventListener('click',e=>{const b=e.target.closest('.pick');if(b)b.classList.toggle('on');});
   $('#me-events').addEventListener('click',e=>{const b=e.target.closest('.pick');if(b)b.classList.toggle('on');});};
@@ -640,7 +654,7 @@ window.saveMoodEntry=()=>{const date=$('#me-date').value,e=ensureEntry(date);e.m
 
 window.openDayDetail=(date)=>{const e=getEntry(date)||{},dt=parseISO(date),c=calorieDay(date);
   const moods=(e.moods||[]).map(id=>{const m=S.settings.moods.find(x=>x.id===id);return m?`<span class="dd-tag" style="background:${m.color}">${m.name}</span>`:'';}).join('');
-  const events=(e.events||[]).map(id=>{const ev=S.settings.events.find(x=>x.id===id);return ev?`<span class="dd-tag" style="background:#6a7a83;display:inline-flex;gap:4px;align-items:center"><img src="${ev.img}" style="width:14px;height:14px">${ev.name}</span>`:'';}).join('');
+  const events=(e.events||[]).map(id=>{const ev=S.settings.events.find(x=>x.id===id);return ev?`<span class="dd-tag" style="background:#6a7a83;display:inline-flex;gap:4px;align-items:center"><span class="event-symbol">${esc(ev.emoji||'⭐')}</span>${esc(ev.name)}</span>`:'';}).join('');
   const row=(k,v)=>`<div class="dd-row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
   const wd=DOW[(dt.getDay()+6)%7];
   modal(`<div class="modal"><div class="modal-h"><div class="dd-nav"><button class="arw" onclick="openDayDetail('${shiftDate(date,-1)}')">‹</button></div>
@@ -844,6 +858,27 @@ function eventChip(ev){
     <button class="del-btn" title="Löschen" onclick="delEvent('${ev.id}')">${TRASH}</button>
   </div>`;
 };
+function bindEventEditor(){
+  $$('#event-editor .event-chip').forEach(chip=>{
+    const id=chip.dataset.id;
+    const emojiInput=chip.querySelector('.e-emoji');
+    const nameInput=chip.querySelector('.e-name');
+    const preview=chip.querySelector('.event-emoji');
+    emojiInput.addEventListener('input',e=>{
+      const ev=S.settings.events.find(x=>x.id===id);if(!ev)return;
+      ev.emoji=e.target.value||'⭐';
+      preview.textContent=ev.emoji;
+      save();
+    });
+    nameInput.addEventListener('change',e=>{
+      const ev=S.settings.events.find(x=>x.id===id);if(!ev)return;
+      ev.name=e.target.value;
+      save();
+    });
+  });
+}
+window.addEvent=()=>{S.settings.events.push({id:uid(),name:'Neues Ereignis',emoji:'⭐'});save();renderVerwaltung();};
+window.delEvent=id=>{S.settings.events=S.settings.events.filter(ev=>ev.id!==id);for(const d in S.entries){if(Array.isArray(S.entries[d].events))S.entries[d].events=S.entries[d].events.filter(x=>x!==id);}save();renderVerwaltung();};
 window.doReset=()=>{const sy=S.sync;S=defaultState();S.sync=sy;saveLocal();closeModal();toast('Auf Startwerte zurückgesetzt');page='verwaltung';render();};
 
 /* =========================================================================
