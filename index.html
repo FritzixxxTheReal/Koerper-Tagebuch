@@ -718,7 +718,7 @@ function renderFoodList(){
   let list=S.foods.slice();
   if(foodFilter!=='all')list=list.filter(f=>(f.cat||'Ohne Kategorie')===foodFilter);
   let es=(foodFilter!=='all'&&foodSort==='cat')?'name':foodSort;
-  if(es==='cat'){const cats={};list.forEach(f=>{(cats[f.cat||'Ohne Kategorie']=cats[f.cat||'Ohne Kategorie']||[]).push(f);});el.innerHTML=Object.keys(cats).sort().map(c=>`<div class="cat-h">${c}</div>${cats[c].map(row).join('')}`).join('');}
+  if(es==='cat'){const cats={};list.forEach(f=>{(cats[f.cat||'Ohne Kategorie']=cats[f.cat||'Ohne Kategorie']||[]).push(f);});el.innerHTML=Object.keys(cats).sort().map(c=>`<div class="cat-h">${c}</div>${cats[c].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(row).join('')}`).join('');}
   else{const asc=['kcal','carbs','fat'];list.sort((a,b)=>es==='name'?a.name.localeCompare(b.name):asc.includes(es)?((a[es]||0)-(b[es]||0)):((b[es]||0)-(a[es]||0)));el.innerHTML=list.map(row).join('');}
 }
 window.delFood=id=>{S.foods=S.foods.filter(f=>f.id!==id);save();buildFoodControls();renderFoodList();};
